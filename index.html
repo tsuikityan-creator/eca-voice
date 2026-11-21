@@ -127,3 +127,95 @@
     recognition = new SpeechRecognition();
     recognition.lang = 'zh-HK';
     recognition.interimResults = false;
+
+    recognition.onstart = function() {
+      document.getElementById('micBtn').classList.add('listening');
+      document.getElementById('status').innerText = '🔴 聆聽中... 請講出班別同班號';
+    };
+
+    recognition.onresult = function(event) {
+      const transcript = event.results[0][0].transcript;
+      document.getElementById('status').innerText = `聽到：「${transcript}」，查詢中...`;
+      searchServer(transcript);
+    };
+
+    recognition.onerror = function(event) {
+      document.getElementById('micBtn').classList.remove('listening');
+      if (event.error === 'not-allowed') {
+        document.getElementById('status').innerText = '❌ 權限被拒：請按瀏覽器「允許」使用咪高峰';
+      } else if (event.error === 'no-speech') {
+        document.getElementById('status').innerText = '⚠️ 聽唔到聲音，請靠近咪高峰再試';
+      } else {
+        document.getElementById('status').innerText = '❌ 收音錯誤：' + event.error;
+      }
+    };
+
+    recognition.onend = function() {
+      document.getElementById('micBtn').classList.remove('listening');
+    };
+  } else {
+    document.getElementById('status').innerText = '❌ 此瀏覽器不支援語音功能，請改用 Chrome 或 Safari';
+  }
+
+  function startListening() {
+    if (!recognition) return;
+    window.speechSynthesis.cancel();
+    recognition.start();
+  }
+
+  function handleManual() {
+    const val = document.getElementById('manualInput').value.trim();
+    if (val) {
+      document.getElementById('status').innerText = '查詢中...';
+      searchServer(val);
+    }
+  }
+
+  function searchServer(text) {
+    fetch(GAS_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ spokenText: text })
+    })
+    .then(response => response.json())
+    .then(res => {
+      document.getElementById('status').innerText = '查詢完成';
+      const resultBox = document.getElementById('resultBox');
+      const replyText = document.getElementById('replyText');
+      const cardsContainer = document.getElementById('cardsContainer');
+      
+      resultBox.style.display = 'block';
+      replyText.innerText = res.message;
+      cardsContainer.innerHTML = '';
+
+      if (res.success && res.activities && res.activities.length > 0) {
+        res.activities.forEach(act => {
+          cardsContainer.innerHTML += `
+            <div class="card">
+              <div class="card-title">📌 ${act.name}</div>
+              <div class="card-detail">⏰ 時間：${act.time}</div>
+              <div class="card-detail">📍 地點：${act.location}</div>
+            </div>
+          `;
+        });
+      }
+      speakCantonese(res.message);
+    })
+    .catch(err => {
+      document.getElementById('status').innerText = '❌ 連線失敗，請確認已貼上正確嘅 /exec 網址';
+    });
+  }
+
+  function speakCantonese(text) {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-HK';
+      utterance.rate = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  }
+</script>
+
+</body>
+</html>
