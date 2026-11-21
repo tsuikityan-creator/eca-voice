@@ -44,6 +44,9 @@
       justify-content: center;
     }
     .mic-btn:active { transform: scale(0.95); }
+    .mic-btn.speaking {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+    }
     .mic-btn.listening {
       background: linear-gradient(135deg, #ef4444, #dc2626);
       animation: pulse 1.5s infinite;
@@ -102,8 +105,8 @@
   <h1>🏫 課外活動語音查詢</h1>
   <p class="subtitle">撳掣講出你嘅「班別」同「班號」<br>例如：「1A班 1號」</p>
 
-  <button id="micBtn" class="mic-btn" onclick="startListening()">🎤</button>
-  <div id="status">撳一下咪高峰開始講嘢</div>
+  <button id="micBtn" class="mic-btn" onclick="startVoiceFlow()">🎤</button>
+  <div id="status">撳一下咪高峰開始查詢</div>
 
   <div id="resultBox" class="result-box">
     <div id="replyText" style="line-height: 1.5; font-size: 15px;"></div>
@@ -118,7 +121,7 @@
 
 <script>
   // ⚠️ 請將下面雙引號入面嘅文字，換成你嘅 Google Apps Script /exec 網址
-  const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxyDR5IK-kMRUwiQJDNPzBDD1xFbQ2HnTwpuiyAXAKPg4s8d70AuQm4e6Ss1TY3Rp7c/exec";
+  const GAS_API_URL = "貼上你嘅APPS_SCRIPT網址";
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition;
@@ -129,7 +132,9 @@
     recognition.interimResults = false;
 
     recognition.onstart = function() {
-      document.getElementById('micBtn').classList.add('listening');
+      const btn = document.getElementById('micBtn');
+      btn.classList.remove('speaking');
+      btn.classList.add('listening');
       document.getElementById('status').innerText = '🔴 聆聽中... 請講出班別同班號';
     };
 
@@ -140,7 +145,7 @@
     };
 
     recognition.onerror = function(event) {
-      document.getElementById('micBtn').classList.remove('listening');
+      resetBtn();
       if (event.error === 'not-allowed') {
         document.getElementById('status').innerText = '❌ 權限被拒：請按瀏覽器「允許」使用咪高峰';
       } else if (event.error === 'no-speech') {
@@ -151,16 +156,61 @@
     };
 
     recognition.onend = function() {
-      document.getElementById('micBtn').classList.remove('listening');
+      resetBtn();
     };
   } else {
     document.getElementById('status').innerText = '❌ 此瀏覽器不支援語音功能，請改用 Chrome 或 Safari';
   }
 
-  function startListening() {
+  function resetBtn() {
+    const btn = document.getElementById('micBtn');
+    btn.classList.remove('listening', 'speaking');
+  }
+
+  // 主流程：先語音問好，講完自動開咪收音
+  function startVoiceFlow() {
     if (!recognition) return;
+    
+    // 如果正在收音，再按一下就停止
+    if (document.getElementById('micBtn').classList.contains('listening')) {
+      recognition.stop();
+      return;
+    }
+
     window.speechSynthesis.cancel();
-    recognition.start();
+    const btn = document.getElementById('micBtn');
+    btn.classList.add('speaking');
+    document.getElementById('status').innerText = '🔊 系統提示中...';
+
+    const greeting = "同學你好，請你說出你的班別和班號";
+    
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(greeting);
+      utterance.lang = 'zh-HK';
+      utterance.rate = 1.05; // 語速稍快一點，學生不用等太久
+      
+      let hasStarted = false;
+      const beginListening = () => {
+        if (hasStarted) return;
+        hasStarted = true;
+        try {
+          recognition.start();
+        } catch (e) {
+          console.log(e);
+        }
+      };
+
+      // 講完歡迎詞後，自動啟動咪高峰
+      utterance.onend = beginListening;
+      utterance.onerror = beginListening;
+
+      window.speechSynthesis.speak(utterance);
+
+      // 安全保險機制：萬一某些舊手機無觸發 onend，4.5 秒後強制自動開咪
+      setTimeout(beginListening, 4500);
+    } else {
+      recognition.start();
+    }
   }
 
   function handleManual() {
@@ -199,6 +249,7 @@
           `;
         });
       }
+      // 讀出搜尋結果
       speakCantonese(res.message);
     })
     .catch(err => {
