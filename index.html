@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>校園語音活動查詢系統</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #f0f4f8;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      color: #1e293b;
+    }
+    .container {
+      max-width: 450px;
+      width: 100%;
+      background: white;
+      padding: 25px;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+      box-sizing: border-box;
+    }
+    h1 { font-size: 22px; color: #0f172a; margin-bottom: 5px; }
+    p.subtitle { color: #64748b; font-size: 14px; margin-bottom: 25px; }
+    .mic-btn {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+      font-size: 40px;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+      transition: transform 0.2s, background 0.3s;
+      margin: 10px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mic-btn:active { transform: scale(0.95); }
+    .mic-btn.listening {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+      70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    #status { margin-top: 15px; font-weight: 600; color: #3b82f6; min-height: 24px; }
+    .result-box {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f8fafc;
+      border-radius: 12px;
+      border-left: 4px solid #3b82f6;
+      text-align: left;
+      display: none;
+    }
+    .card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 10px;
+    }
+    .card-title { font-weight: bold; font-size: 16px; color: #0f172a; }
+    .card-detail { font-size: 14px; color: #475569; margin-top: 4px; }
+    .manual-box {
+      margin-top: 25px;
+      padding-top: 15px;
+      border-top: 1px dashed #cbd5e1;
+      display: flex;
+      gap: 8px;
+    }
+    input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .send-btn {
+      padding: 10px 16px;
+      background: #0f172a;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🏫 課外活動語音查詢</h1>
+  <p class="subtitle">撳掣講出你嘅「班別」同「班號」<br>例如：「1A班 1號」</p>
+
+  <button id="micBtn" class="mic-btn" onclick="startListening()">🎤</button>
+  <div id="status">撳一下咪高峰開始講嘢</div>
+
+  <div id="resultBox" class="result-box">
+    <div id="replyText" style="line-height: 1.5; font-size: 15px;"></div>
+    <div id="cardsContainer"></div>
+  </div>
+
+  <div class="manual-box">
+    <input type="text" id="manualInput" placeholder="收音唔清？可直接輸入 e.g. 1A 1">
+    <button class="send-btn" onclick="handleManual()">查詢</button>
+  </div>
+</div>
+
+<script>
+  // ⚠️ 請將下面雙引號入面嘅文字，換成你嘅 Google Apps Script /exec 網址
+  const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxyDR5IK-kMRUwiQJDNPzBDD1xFbQ2HnTwpuiyAXAKPg4s8d70AuQm4e6Ss1TY3Rp7c/exec";
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition;
+
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'zh-HK';
+    recognition.interimResults = false;
